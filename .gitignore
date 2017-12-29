@@ -1,0 +1,12 @@
+.DS_Store
+.vscode*
+output/
+*.csv
+lab_result/
+paper/
+data_original/
+data_modify/
+*.xls
+*.xlsx
+*.pdf
+iPhone4s-TotalSaleBak.png
