@@ -314,7 +314,9 @@ def global_var(fname, mode, sas_ratio=0.033, sas_bounce_ratio=0.01):
 
 def move_result_to_folder(fname, sas_ratio=0.033, sas_bounce_ratio=0.01):
     folder_str = r'output/'
-    print(folder_str)
+    # print(folder_str)
+    folder_str = folder_str+str(sas_ratio).replace('.','')+'_'+str(sas_bounce_ratio).replace('.','')+'/'
+    print("output folder: {}".format(folder_str))
     shutil.move(fname, folder_str)
     # cmd = 'mv '+fname+' '+folder_str
 
