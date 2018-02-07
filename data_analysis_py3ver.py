@@ -1,4 +1,5 @@
 # coding=UTF-8
+# update 2018/02/07
 import csv
 import numpy as np
 import matplotlib.pyplot as plt
@@ -35,7 +36,8 @@ SAS_RATIO_THRESH = 0.033
 SAS_BOUNCE_RATIO_THRESH = 0.02
 
 # 大量供貨與目前銷貨的移動平均倍數關係為五倍
-BIG_SUPPLY_FACTOR = 5
+BIG_SUPPLY_FACTOR = 5 # 版本 1: 使用 factor 偵測大量供貨
+BIG_SUPPLY_IN_WEEK_THRESH = 1000# 版本 2: 使用固定數量的 threshold 偵測一週內大樣供貨
 
 # 單日大銷量的門檻值 預設 1000台
 BIG_DAILY_SALE_THRESH = 1000
@@ -71,6 +73,7 @@ y_arr = []
 # 我們要找的 hardcore 切斷的時間點
 hardcore_cut_point = 0
 
+OUTPUT_ROW_DATA = []
 
 def is_chinese_new_year(date):
     if any(date in s for s in NEW_YEAR_FACTOR):
@@ -120,7 +123,7 @@ def check_week_saleratio_bounce(current_counter, data_arr, week_arr):
 
     return flag, week_arr
 
-'''
+''' 版本1
     funcion name: check_week_daily_big_supply
     input:
         week_arr: 一週資料
@@ -134,6 +137,23 @@ def check_week_daily_big_supply(week_arr, BIG_SUPPLY_FACTOR=BIG_SUPPLY_FACTOR):
     for data in week_arr:
         # 供貨量大於七日均銷的五倍
         if float(data[4]) > float(data[9]) * BIG_SUPPLY_FACTOR:
+            flag = True
+    return flag
+
+''' 版本2
+    funcion name: check_week_daily_big_supply
+    input:
+        week_arr: 一週資料
+        BIG_SUPPLY_IN_WEEK_THRESH: 大的供貨門檻值 實驗 1000, 800, 700, 500 台
+    output:
+        True: 一週內有大供貨
+        Fals: 一週內有無大供貨
+'''
+def check_week_daily_big_supply_with_const_thresh(week_arr,BIG_SUPPLY_IN_WEEK_THRESH=BIG_SUPPLY_IN_WEEK_THRESH):
+    flag = False
+    for data in week_arr:
+        # 供貨量大於門檻值 預設 1000 台
+        if float(data[4]) > BIG_SUPPLY_IN_WEEK_THRESH:
             flag = True
     return flag
 
@@ -165,10 +185,16 @@ def check_week_low_supply_condition(week_arr, BIG_WEEKLY_SALE_THRESH=BIG_WEEKLY_
     return flag
 
 def main():
+    report_row_data = []
     first_sas_downward_point = 0
     is_first_point = True
     hardcore_point = 0
     find_hardcore = False
+
+    report_row_data.append(INPUT_FILE_NAME)
+    report_row_data.append(SAS_RATIO_THRESH)
+    report_row_data.append(SAS_BOUNCE_RATIO_THRESH)
+    report_row_data.append(BIG_SUPPLY_IN_WEEK_THRESH)
     # 讀取資料
     with open(INPUT_FILE_NAME, 'rt') as csvfile:
         reader = csv.reader(csvfile, delimiter=' ', quotechar='|')
@@ -212,7 +238,10 @@ def main():
                     is_saleratio_bounce, week_arr = check_week_saleratio_bounce(counter, data_arr, week_arr)
 
                     # 檢查一週內有大量供貨 T: 有  F: 無
-                    is_big_supply_in_week = check_week_daily_big_supply(week_arr)
+                    '''version 1'''
+                    # is_big_supply_in_week = check_week_daily_big_supply(week_arr)
+                    '''version 2'''
+                    is_big_supply_in_week = check_week_daily_big_supply_with_const_thresh(week_arr)
 
                     # 檢查一週內是否有大的日銷量 T: 有  F: 無
                     is_big_sale_in_week = check_week_daily_big_sale(week_arr)
@@ -240,20 +269,39 @@ def main():
                                     hardcore_point = counter
                                     find_hardcore = True
 
+                            ''' version 1
                             # 有大量供貨 且 日銷量均為 1000 以下 
                             if is_big_supply_in_week == True and is_big_sale_in_week == False:
                                 if is_low_supply_bounce_condition_in_week == False:
                                     hardcore_point = int(x)
                                     find_hardcore = True
+                            '''
+
+                            '''version 2 '''
+                            # 有大量供貨 > 1000 , 800, 700, 500
+                            if is_big_supply_in_week == True:
+                                if is_big_sale_in_week == False:
+                                    hardcore_point = int(x)
+                                    find_hardcore = True                                    
+                                    # if is_low_supply_bounce_condition_in_week == False:
+                                        # hardcore_point = int(x)
+                                        # find_hardcore = True
+
 
             x_arr.append(x)
             y_arr.append(y)
 
         counter += 1
 
-    save_figure(x_arr, y_arr, first_sas_downward_point, hardcore_point)
+    # 蒐集實驗結果數據
+    report_row_data.append(first_sas_downward_point)
+    report_row_data.append(hardcore_point)
+    report_row_data.append(find_hardcore_volume(hardcore_point))
+    OUTPUT_ROW_DATA.append(report_row_data)
 
-def find_hardcore(hardcore_point):
+    # save_figure(x_arr, y_arr, first_sas_downward_point, hardcore_point)
+
+def find_hardcore_volume(hardcore_point):
     # 讀取資料
     with open(INPUT_FILE_NAME, 'rt') as csvfile:
         reader = csv.reader(csvfile, delimiter=' ', quotechar='|')
@@ -270,10 +318,11 @@ def save_figure(x_arr, y_arr, first_sas_downward_point, hardcore_point):
     plt.suptitle(INPUT_FILE_NAME[:-4], fontsize=24)
     # plt.text(1.1,2.0,"供銷比過低門檻:{}".format(SAS_RATIO_THRESH),fontdict=None)
     plt.figtext(0.01, 0.95,'1st low supply-sale ratio at #{} days\n'.format(first_sas_downward_point), horizontalalignment='left', verticalalignment='center', color='red')
-    plt.figtext(0.01, 0.95,'\nhardcore at #{} days'.format(hardcore_point), horizontalalignment='left', verticalalignment='center', color='green')
+    plt.figtext(0.01, 0.95,'\n\nhardcore at #{} days\nhardcore: {}'.format(hardcore_point,find_hardcore_volume(hardcore_point)), horizontalalignment='left', verticalalignment='center', color='green')
+    # plt.figtext(0.01, 0.95,'\n\nhardcore: {}'.format(find_hardcore(hardcore_point)), horizontalalignment='left', verticalalignment='center', color='green')
 
     plt.figtext(0.99, 0.95,'low supply-sale ratio threshold: {}\nbounce ratio threshold: {}\n'.format(SAS_RATIO_THRESH, SAS_BOUNCE_RATIO_THRESH), horizontalalignment='right', verticalalignment='center')
-    plt.figtext(0.99, 0.95,'\n\nhardcore: {}'.format(find_hardcore(hardcore_point)), horizontalalignment='right', verticalalignment='center', color='green')
+    plt.figtext(0.99, 0.95,'\n\nsupply in 7 days > {}'.format(BIG_SUPPLY_IN_WEEK_THRESH), horizontalalignment='right', verticalalignment='center')
     # plt.figtext(0.99, 0.95,'low supply-sale ratio threshold: {}\nbounce ratio threshold: {}\nhardcore at sale days: {}'.format(SAS_RATIO_THRESH, SAS_BOUNCE_RATIO_THRESH, hardcore_point), horizontalalignment='right', verticalalignment='center')
 
     plt.plot(x_arr, y_arr,linewidth=2.0)
@@ -298,7 +347,7 @@ def save_figure(x_arr, y_arr, first_sas_downward_point, hardcore_point):
     plt.clf()
     plt.close()
 
-def global_var(fname, mode, sas_ratio=0.033, sas_bounce_ratio=0.01):
+def global_var(fname, mode, sas_ratio=0.033, sas_bounce_ratio=0.01, big_supply_in_week=1000):
     global INPUT_FILE_NAME
     INPUT_FILE_NAME = fname
     global OUTPUT_MODE
@@ -312,6 +361,9 @@ def global_var(fname, mode, sas_ratio=0.033, sas_bounce_ratio=0.01):
     global SAS_BOUNCE_RATIO_THRESH
     SAS_BOUNCE_RATIO_THRESH = sas_bounce_ratio
 
+    global BIG_SUPPLY_IN_WEEK_THRESH
+    BIG_SUPPLY_IN_WEEK_THRESH = big_supply_in_week
+
 def move_result_to_folder(fname, sas_ratio=0.033, sas_bounce_ratio=0.01):
     folder_str = r'output/'
     # print(folder_str)
@@ -320,9 +372,58 @@ def move_result_to_folder(fname, sas_ratio=0.033, sas_bounce_ratio=0.01):
     shutil.move(fname, folder_str)
     # cmd = 'mv '+fname+' '+folder_str
 
+def save_to_report(row_data):
+    with open('report.csv', 'w') as csvfile:
+        writer = csv.writer(csvfile, delimiter=',',quotechar=',', quoting=csv.QUOTE_MINIMAL) # 逗號分隔
+        writer.writerow(['FileName', 'Supply And Sale Ratio Threshold', 'Supply And Sale Bounce Ratio Threshold', 'Big Supply in 7 Days Threshold', '1st Low Supply-Sale Ratio Point(days)', 'Hardcore Point(days)', 'Hardcore'])
+        for row in row_data:
+            writer.writerow(row)
+
+def auto_run_save_to_report():
+    INPUT_FILE_NAME_ARR = ['iPhone6.csv','iPhone6_Plus.csv','iPhone6s.csv','iPhone6s_Plus.csv','iPhone7.csv','iPhone7_Plus.csv']
+    sas_ratio_input = [0.033,0.05]
+    sas_bounce_ratio_input = [0.01,0.02]
+    mode_input = [1,2]
+    big_supply_in_week_input = [1000,800,700,500]
+
+    for f in INPUT_FILE_NAME_ARR:
+        for n1 in sas_ratio_input:
+            for n2 in sas_bounce_ratio_input:
+                for n3 in big_supply_in_week_input:
+                    fname = f
+                    mode = 1
+                    sas_ratio = n1
+                    sas_bounce_ratio = n2
+                    big_supply_in_week = n3
+
+                    global_var(fname,mode,sas_ratio,sas_bounce_ratio,big_supply_in_week) #setting global variable
+        
+                    # global_var(fname,mode)
+
+                    message_str = ['Seven Days Sale Moving Mean Analysis', 'Total Sale Analysis']
+                    print("\n"+INPUT_FILE_NAME+" in "+message_str[OUTPUT_MODE-1]+" Start!!!")
+                    print("SAS_RATIO_THRESH = {}, SAS_BOUNCE_RATIO_THRESH = {}".format(SAS_RATIO_THRESH, SAS_BOUNCE_RATIO_THRESH))
+                    main()
+
+                    # # move result file to lab result folder (start)
+                    # if OUTPUT_MODE == 1:
+                    #     save_fname = INPUT_FILE_NAME[:-4]+"-7DaysSaleMovingMean.png" #7DaysSaleMovingMean 
+                    # if OUTPUT_MODE == 2:
+                    #     save_fname = INPUT_FILE_NAME[:-4]+"-TotalSale.png"  # TotalSale
+
+                    # save_fname = save_fname[:-4]+str(BIG_SUPPLY_IN_WEEK_THRESH)+".png"
+
+                    # move_result_to_folder(save_fname, SAS_RATIO_THRESH, SAS_BOUNCE_RATIO_THRESH)
+                    # os.system(move_result_to_folder(save_fname))
+                    # move result file to lab result folder (end)
+    save_to_report(OUTPUT_ROW_DATA)
+
 if __name__ == "__main__":
     # INPUT_FILE_NAME_ARR = ['iPhone3GS.csv','iPhone4.csv','iPhone4s.csv','iPhone5.csv','iPhone5s.csv','iPhone6.csv','iPhone6_Plus.csv','iPhone6s.csv','iPhone6s_Plus.csv','iPhone7.csv','iPhone7_Plus.csv']
+    auto_run_save_to_report()
 
+    # USER INPUT & RUN
+    '''
     iPhone_Type = input("""input iPhone Type: 
         0: iPhone3GS
         1: iPhone4
@@ -350,7 +451,12 @@ if __name__ == "__main__":
     sas_ratio = float(sas_ratio_input)
     sas_bounce_ratio_input = input('Input Supply And Sale Bounce Ratio Threshold (0.01 or 0.02): ')
     sas_bounce_ratio = float(sas_bounce_ratio_input)
-    global_var(fname,mode,sas_ratio,sas_bounce_ratio)
+
+    big_supply_in_week_input = input('Input Big Supply in 7 Days Threshold (default >= 1000): ')
+    big_supply_in_week = float(big_supply_in_week_input)
+
+    global_var(fname,mode,sas_ratio,sas_bounce_ratio,big_supply_in_week) #setting global variable
+    
     # global_var(fname,mode)
 
     message_str = ['Seven Days Sale Moving Mean Analysis', 'Total Sale Analysis']
@@ -364,8 +470,10 @@ if __name__ == "__main__":
     if OUTPUT_MODE == 2:
         save_fname = INPUT_FILE_NAME[:-4]+"-TotalSale.png"  # TotalSale
 
+    # save_fname = save_fname[:-4]+str(BIG_SUPPLY_IN_WEEK_THRESH)+".png"
+
     move_result_to_folder(save_fname, SAS_RATIO_THRESH, SAS_BOUNCE_RATIO_THRESH)
     # os.system(move_result_to_folder(save_fname))
     # move result file to lab result folder (end)
-
+    '''    
 
