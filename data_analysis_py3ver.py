@@ -299,7 +299,7 @@ def main():
     report_row_data.append(find_hardcore_volume(hardcore_point))
     OUTPUT_ROW_DATA.append(report_row_data)
 
-    # save_figure(x_arr, y_arr, first_sas_downward_point, hardcore_point)
+    save_figure(x_arr, y_arr, first_sas_downward_point, hardcore_point)
 
 def find_hardcore_volume(hardcore_point):
     # 讀取資料
@@ -420,10 +420,9 @@ def auto_run_save_to_report():
 
 if __name__ == "__main__":
     # INPUT_FILE_NAME_ARR = ['iPhone3GS.csv','iPhone4.csv','iPhone4s.csv','iPhone5.csv','iPhone5s.csv','iPhone6.csv','iPhone6_Plus.csv','iPhone6s.csv','iPhone6s_Plus.csv','iPhone7.csv','iPhone7_Plus.csv']
-    auto_run_save_to_report()
+    # auto_run_save_to_report()
 
     # USER INPUT & RUN
-    '''
     iPhone_Type = input("""input iPhone Type: 
         0: iPhone3GS
         1: iPhone4
@@ -475,5 +474,5 @@ if __name__ == "__main__":
     move_result_to_folder(save_fname, SAS_RATIO_THRESH, SAS_BOUNCE_RATIO_THRESH)
     # os.system(move_result_to_folder(save_fname))
     # move result file to lab result folder (end)
-    '''    
+    
 
